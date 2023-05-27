@@ -1,0 +1,107 @@
+pipeline:
+    name: employee-api-pipeline
+    identifier: employeeapipipeline
+    projectIdentifier: Springboot_Employee_API
+    orgIdentifier: default
+    tags: {}
+    properties:
+        ci:
+            codebase:
+                connectorRef: pasgithub
+                repoName: springbootemployee-api
+                build: <+input>
+    stages:
+        - stage:
+              name: build employee api
+              identifier: build_employee_api
+              description: ""
+              type: CI
+              spec:
+                  cloneCodebase: true
+                  infrastructure:
+                      type: KubernetesDirect
+                      spec:
+                          connectorRef: org.GKE
+                          namespace: harness-builds
+                  execution:
+                      steps:
+                          - step:
+                                type: Run
+                                name: Package Application
+                                identifier: Package_Application
+                                spec:
+                                    connectorRef: account.harnessImage
+                                    image: maven:3.8.3-openjdk-11-slim
+                                    command: mvn -DskipTests -Dsnyk.skip package
+                                    privileged: false
+                          - step:
+                                type: Run
+                                name: snyk test
+                                identifier: snyk_test
+                                spec:
+                                    connectorRef: account.harnessImage
+                                    image: snyk/snyk-cli:1.745.0-maven-3.5.4
+                                    command: |-
+                                        SNYK_TOKEN=<+secrets.getValue("SNYK_TOKEN")>
+                                        snyk config set api=$SNYK_TOKEN
+                                        snyk test || true
+                                    privileged: false
+                                failureStrategies: []
+                          - step:
+                                type: Run
+                                name: snyk code test
+                                identifier: snyk_code_test
+                                spec:
+                                    connectorRef: account.harnessImage
+                                    image: snyk/snyk-cli:1.745.0-maven-3.5.4
+                                    command: |-
+                                        SNYK_TOKEN=<+secrets.getValue("SNYK_TOKEN")>
+                                        snyk config set api=$SNYK_TOKEN
+                                        snyk code test || true
+                                    privileged: false
+                                when:
+                                    stageStatus: Success
+                                failureStrategies: []
+                          - step:
+                                type: Run
+                                name: snyk IaC test
+                                identifier: snyk_IaC_test
+                                spec:
+                                    connectorRef: account.harnessImage
+                                    image: snyk/snyk-cli:1.745.0-maven-3.5.4
+                                    command: |-
+                                        SNYK_TOKEN=<+secrets.getValue("SNYK_TOKEN")>
+                                        snyk config set api=$SNYK_TOKEN
+                                        snyk iac test ./employee-K8s.yaml || true
+                                    privileged: false
+                                when:
+                                    stageStatus: Success
+                                failureStrategies: []
+                          - step:
+                                type: BuildAndPushDockerRegistry
+                                name: Build Container
+                                identifier: Build_Container
+                                spec:
+                                    connectorRef: pasdockerhub
+                                    repo: pasapples/springbootemployee
+                                    tags:
+                                        - harness
+                                    dockerfile: Dockerfile.harness
+                                    optimize: true
+                          - step:
+                                type: Run
+                                name: snyk container test
+                                identifier: snyk_container_test
+                                spec:
+                                    connectorRef: pasdockerhub
+                                    image: snyk/snyk-cli:1.745.0-maven-3.5.4
+                                    command: |-
+                                        SNYK_TOKEN=<+secrets.getValue("SNYK_TOKEN")>
+                                        snyk config set api=$SNYK_TOKEN
+                                        snyk container test pasapples/springbootemployee:harness || true
+                                    privileged: false
+                                    resources:
+                                        limits:
+                                            memory: 2048Mi
+              variables: []
+

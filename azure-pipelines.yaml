@@ -1,0 +1,86 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger:
+- master
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+
+  # .. your instructions on building the app or preparing the repository
+
+  # install & prepare snyk
+  - script: |
+      npm install -g snyk snyk-to-html
+      mkdir html
+      snyk auth $(SNYK_TOKEN)
+      # explicitly allow scripts to continue if errors occur
+      set +e
+    displayName: 'snyk install & auth'
+  # snyk code
+  - script: |
+      snyk code test --sarif-file-output=results.sarif || true
+      RESULT=$?
+      snyk-to-html -o $(Build.ArtifactStagingDirectory)/results-code.html < results.sarif || true
+      exit $RESULT
+    continueOnError: true
+    displayName: 'snyk code'
+  # snyk open source
+  - script: |
+      snyk test --json-file-output=results.json || true
+      RESULT=$?
+      snyk-to-html -o $(Build.ArtifactStagingDirectory)/results-open-source.html < results.json || true
+      exit $RESULT
+    continueOnError: true
+    displayName: 'snyk open source'
+  # snyk container
+  # NOTE: Change the image name
+  - script: |
+      snyk container test pasapples/snyk-boot-web:v1 --json-file-output=results.json || true
+      RESULT=$?
+      snyk-to-html -o $(Build.ArtifactStagingDirectory)/results-container.html < results.json || true
+      exit $RESULT
+    continueOnError: true
+    displayName: 'snyk container'
+  # snyk iac
+  - script: |
+      snyk iac test --json-file-output=results.json || true
+      RESULT=$?
+      snyk-to-html -o $(Build.ArtifactStagingDirectory)/results-iac.html < results.json || true
+      exit $RESULT
+    continueOnError: true
+    displayName: 'snyk iac'
+  - task: PublishHtmlReport@1
+    condition: succeededOrFailed()
+    inputs:
+      reportDir: $(Build.ArtifactStagingDirectory)/results-code.html
+      tabName: 'Snyk Code'
+
+  - task: PublishHtmlReport@1
+    condition: succeededOrFailed()
+    inputs:
+      reportDir: $(Build.ArtifactStagingDirectory)/results-open-source.html
+      tabName: 'Snyk Open Source'
+
+  - task: PublishHtmlReport@1
+    condition: succeededOrFailed()
+    inputs:
+      reportDir: $(Build.ArtifactStagingDirectory)/results-container.html
+      tabName: 'Snyk Container'
+
+  - task: PublishHtmlReport@1
+    condition: succeededOrFailed()
+    inputs:
+      reportDir: $(Build.ArtifactStagingDirectory)/results-iac.html
+      tabName: 'Snyk IaC'
+
+  - task: PublishBuildArtifacts@1
+    inputs:
+      pathToPublish: '$(Build.ArtifactStagingDirectory)'
+      artifactName: Snyk Reports
+
