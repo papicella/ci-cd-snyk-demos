@@ -1,0 +1,28 @@
+snyk-boot-web project
+
+gitlab-service-account: 6b883ec1-6741-4736-962f-e311086f6c1d
+
+stages:          # List of stages for jobs, and their order of execution
+  - test
+  - deploy
+
+image: snyk/snyk-cli:1.745.0-maven-3.5.4
+build:
+  stage: test
+  script:
+    - mvn install
+    - snyk auth $SNYK_TOKEN || true
+    - snyk test || true
+    - snyk test --json | snyk-to-html -o snyk_results_sca.html || true
+    - snyk code test || true
+    - snyk code test --json | snyk-to-html -o snyk_results_sast.html || true
+    - snyk container test pasapples/snyk-boot-web:v1 --json | snyk-to-html -o snyk_results_container.html || true
+    - snyk iac test ./kubernetes/snyk-boot-web-deployment-V1.yaml || true
+    - snyk iac test ./kubernetes/snyk-boot-web-deployment-V1.yaml --json | snyk-to-html -o snyk_results_iac.html || true
+  artifacts:
+    when: always
+    paths: 
+      - snyk_results_sca.html
+      - snyk_results_sast.html
+      - snyk_results_container.html
+      - snyk_results_iac.html
