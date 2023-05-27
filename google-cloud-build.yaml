@@ -1,0 +1,39 @@
+steps:
+  - name: 'snyk/snyk-cli:1.745.0-maven-3.5.4'
+    args:
+      - '-c'
+      - |-
+        snyk config set api=${_MY_SNYK_TOKEN}
+        snyk test || true
+        snyk test --json | snyk-to-html -o snyk-boot-web-sca.html || true    
+    id: Snyk Test
+    entrypoint: /bin/bash
+  - name: gcr.io/cloud-builders/npm
+    args:
+      - '-c'
+      - |-
+        npm install -g snyk
+        npm install -g snyk snyk-to-html
+        snyk config set api=${_MY_SNYK_TOKEN}
+        snyk code test || true
+        snyk code test --json | snyk-to-html > snyk-boot-web-sast.html || true
+    id: Snyk Code Test
+    entrypoint: /bin/bash
+  - name: gcr.io/cloud-builders/npm
+    args:
+      - '-c'
+      - >-
+        npm install -g snyk snyk-to-html snyk config set api=${_MY_SNYK_TOKEN}
+        snyk iac test kubernetes/snyk-boot-web-deployment-V1.yaml || true  snyk
+        iac test kubernetes/snyk-boot-web-deployment-V1.yaml --json |
+        snyk-to-html > snyk-boot-web-iac.html || true
+    id: Snyk IaC Test
+    entrypoint: /bin/bash
+artifacts:
+  objects:
+    location: 'gs://apples-store/snyk-output'
+    paths:
+      - snyk-boot-web-sca.html
+      - snyk-boot-web-sast.html
+      - snyk-boot-web-iac.html
+
