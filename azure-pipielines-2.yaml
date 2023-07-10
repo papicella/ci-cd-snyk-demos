@@ -1,0 +1,72 @@
+
+trigger:
+  branches:
+    include:
+    - master
+stages:
+- stage: __default
+  jobs:
+  - job: Job
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - task: NodeTool@0
+      inputs:
+        versionSpec: '12.x'
+      displayName: 'Install Node.js'
+    - task: CmdLine@2
+      inputs:
+        script: |
+          npm install
+    - task: CmdLine@2
+      displayName: 'snyk install & auth'
+      inputs:
+        script: |
+          npm install -g snyk snyk-to-html
+          mkdir html
+          snyk auth $(SNYK_TOKEN)
+          # explicitly allow scripts to continue if errors occur
+          set +e
+    - task: CmdLine@2
+      continueOnError: true
+      displayName: 'snyk code'
+      inputs:
+        script: |
+          cd ./routes || true
+          snyk code test --sarif-file-output=results.sarif --report --project-name="ADO-CODE-REPORT-v5" || true
+          ls -la results.sarif || true
+          RESULT=$?
+          snyk-to-html -o $(Build.ArtifactStagingDirectory)/results-code.html < results.sarif
+          exit $RESULT
+    - task: CmdLine@2
+      continueOnError: true
+      displayName: 'snyk open source'
+      inputs:
+        script: |
+          snyk test --json-file-output=results.json || true
+          RESULT=$?
+          snyk-to-html -o $(Build.ArtifactStagingDirectory)/results-open-source.html < results.json
+          exit $RESULT
+    - task: CmdLine@2
+      continueOnError: true
+      displayName: 'snyk open source monitor'
+      inputs:
+        script: |
+          snyk monitor --project-name=ADO-SCA-Monitor-v4 || true
+          RESULT=$?
+          exit $RESULT
+    - task: PublishHtmlReport@1
+      condition: succeededOrFailed()
+      inputs:
+        reportDir: $(Build.ArtifactStagingDirectory)/results-code.html
+        tabName: 'Snyk Code'
+    - task: PublishHtmlReport@1
+      condition: succeededOrFailed()
+      inputs:
+        reportDir: $(Build.ArtifactStagingDirectory)/results-open-source.html
+        tabName: 'Snyk Open Source'
+    - task: PublishBuildArtifacts@1
+      inputs:
+        pathToPublish: '$(Build.ArtifactStagingDirectory)'
+        artifactName: Snyk Reports
+
