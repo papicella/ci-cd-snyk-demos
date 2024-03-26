@@ -1,0 +1,20 @@
+steps:
+  - label: "🔎 Scanning sca with Snyk"
+    plugins:
+      - snyk#v0.1.0:
+          scan: 'oss'
+          annotate: true
+          org: "pas.apicella-41p"
+  - label: "🔎 Scanning SAST with Snyk"
+    plugins:
+      - snyk#v0.1.0:
+          scan: 'code'
+          annotate: true
+          org: "pas.apicella-41p"
+  - label: "🔎 Scanning container image with Snyk"
+    plugins:
+      - snyk#v0.1.0:
+          scan: 'container'
+          annotate: true
+          org: "pas.apicella-41p"
+          image: 'pasapples/snyk-boot-web:v1'
